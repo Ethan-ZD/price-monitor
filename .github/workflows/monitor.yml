@@ -1,0 +1,34 @@
+name: price-monitor
+on:
+  # 每 5 分钟（GitHub 定时任务最小间隔）；避开整点高峰
+  schedule:
+    - cron: "2-57/5 * * * *"
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 取价 + 判断 + 飞书提醒
+        run: python main.py
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_OPEN_ID: ${{ secrets.FEISHU_OPEN_ID }}
+      # 保活：公开仓库 60 天无提交会自动停用定时任务，每天自动推一个时间戳文件
+      - name: daily keepalive
+        run: |
+          T=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$(cat keepalive.txt 2>/dev/null)" != "$T" ]; then
+            echo "$T" > keepalive.txt
+            git config user.name "price-monitor"
+            git config user.email "monitor@users.noreply.github.com"
+            git add keepalive.txt
+            git commit -m "keepalive $T"
+            git push
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
