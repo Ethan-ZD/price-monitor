@@ -5,6 +5,8 @@ on:
   workflow_dispatch:
 jobs:
   monitor:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,11 +20,10 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_OPEN_ID: ${{ secrets.FEISHU_OPEN_ID }}
-      # 自动存回冷却记录 last_trigger.json + 每天保活（防公开仓库 60 天自动停用）
       - name: keepalive + state
         run: |
           T=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          if [ "$(cat keepalive.txt 2>/dev/null)" != "$T" ]; then
+          if [ $(cat keepalive.txt 2>/dev/null) != "$T" ]; then
             echo "$T" > keepalive.txt
           fi
           if git status --porcelain | grep -q .; then
