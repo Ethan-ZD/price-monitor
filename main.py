@@ -2,7 +2,7 @@
 """BTC 阈值监控 + 飞书单聊指令改配置。
 每次运行：读单聊指令（改 config）-> 取价 -> 判断阈值 -> 推飞书提醒。
 纯 Python 标准库。指令格式：上轨 78000 / 下轨 52000 51000 / 冷却 12
-config.json 里的 chat_id = 你和机器人单聊的 chat_id（发单聊消息时返回）。"""
+config.json 里的 chat_id = 你和机器人单聊的 chat_id，不要动。"""
 import json, os, re, time, urllib.request
 
 BASE = "https://open.feishu.cn/open-apis"
@@ -99,20 +99,24 @@ def process_commands(cfg):
     done = set(cmd_state.get("done", []))
     applied = 0
     for m in d.get("data", {}).get("items", []):
-        mid = m.get("message_id")
+        mid = m.get("message_id") or ("t" + str(m.get("create_time")))
         if mid in done:
             continue
         if m.get("msg_type") != "text":
             continue
-        # 只处理你本人发的（sender 是 open_id 且等于你自己）
-        sender = (m.get("sender") or {}).get("id", {})
-        if sender.get("open_id") != open_id:
+        # 只处理你本人发的：sender.id 是字符串，直接和 open_id 比
+        sender_id = (m.get("sender") or {}).get("id", "")
+        if sender_id != open_id:
+            done.add(mid)
             continue
+        raw = m.get("content") or (m.get("body") or {}).get("content") or "{}"
         try:
-            text = json.loads(m.get("content") or "{}").get("text", "").strip()
+            text = json.loads(raw).get("text", "").strip()
         except Exception:
-            continue
+            text = ""
         done.add(mid)
+        if not text:
+            continue
         changed = apply_command(cfg, text)
         if changed:
             json.dump(cfg, open("config.json", "w", encoding="utf-8"),
@@ -122,7 +126,7 @@ def process_commands(cfg):
             applied += 1
     cmd_state["done"] = list(done)[-100:]
     json.dump(cmd_state, open(CMD_STATE, "w", encoding="utf-8"), indent=1)
-    print(f"指令：处理 {len(d.get('data', {}).get('items', []))} 条消息，应用 {applied} 条")
+    print(f"指令：扫 {len(d.get('data', {}).get('items', []))} 条，应用 {applied} 条")
 
 
 # ---------------- 主流程 ----------------
